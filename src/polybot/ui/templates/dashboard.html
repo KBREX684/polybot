@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Polybot Warm Console</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <div class="bg-orb orb-a"></div>
+    <div class="bg-orb orb-b"></div>
+    <div class="bg-orb orb-c"></div>
+
+    <main class="page">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Polymarket AI Trading</p>
+          <h1>Warm Control Console</h1>
+          <p class="subtitle">
+            Generator: <strong>GPT-4o-mini</strong> · Discriminator: <strong>GLM-4.7</strong> · Mode: <strong>Paper Trading</strong>
+          </p>
+        </div>
+        <div class="pulse-chip">Live Audit Trail</div>
+      </header>
+
+      <section class="kpi-grid">
+        <article class="kpi-card">
+          <span>Total Decisions</span>
+          <h2>{{ stats.decisions_total }}</h2>
+        </article>
+        <article class="kpi-card">
+          <span>Risk Passed</span>
+          <h2>{{ stats.risk_passed }}</h2>
+        </article>
+        <article class="kpi-card">
+          <span>Executed Trades</span>
+          <h2>{{ stats.executed }}</h2>
+        </article>
+        <article class="kpi-card">
+          <span>Total Traded (USDC)</span>
+          <h2>{{ stats.traded_usdc }}</h2>
+        </article>
+        <article class="kpi-card">
+          <span>Average Edge</span>
+          <h2>{{ stats.avg_edge }}</h2>
+        </article>
+        <article class="kpi-card">
+          <span>Average Confidence</span>
+          <h2>{{ stats.avg_confidence }}</h2>
+        </article>
+      </section>
+
+      <section class="kpi-grid runtime-grid">
+        <article class="kpi-card">
+          <span>Cycle Interval (sec)</span>
+          <h2>{{ runtime.cycle_interval_seconds }}</h2>
+        </article>
+        <article class="kpi-card">
+          <span>Recommended Interval</span>
+          <h2>{{ runtime.recommended_cycle_interval_seconds }}</h2>
+        </article>
+        <article class="kpi-card">
+          <span>Cycles (Last 1h)</span>
+          <h2>{{ runtime.cycles_last_hour }}</h2>
+        </article>
+        <article class="kpi-card">
+          <span>Decisions (Last 1h)</span>
+          <h2>{{ runtime.decisions_last_hour }}</h2>
+        </article>
+        <article class="kpi-card">
+          <span>Trades (Last 1h)</span>
+          <h2>{{ runtime.trades_last_hour }}</h2>
+        </article>
+        <article class="kpi-card">
+          <span>Est API Calls / Hour</span>
+          <h2>{{ runtime.estimated_api_calls_per_hour }}</h2>
+        </article>
+      </section>
+
+      <section class="dual-grid">
+        <article class="panel">
+          <header class="panel-header">
+            <h3>Pipeline Funnel</h3>
+            <p>From market scan to order execution</p>
+          </header>
+          <div class="funnel">
+            <div class="row">
+              <span>Scanned</span>
+              <div class="bar"><i style="--w:100%"></i></div>
+              <strong>{{ flow.scanned }}</strong>
+            </div>
+            <div class="row">
+              <span>Hard Filter</span>
+              <div class="bar"><i style="--w:{{ (flow.hard_filter * 100 / (flow.scanned or 1))|round(1) }}%"></i></div>
+              <strong>{{ flow.hard_filter }}</strong>
+            </div>
+            <div class="row">
+              <span>Generated</span>
+              <div class="bar"><i style="--w:{{ (flow.generated * 100 / (flow.scanned or 1))|round(1) }}%"></i></div>
+              <strong>{{ flow.generated }}</strong>
+            </div>
+            <div class="row">
+              <span>Reviewed</span>
+              <div class="bar"><i style="--w:{{ (flow.reviewed * 100 / (flow.scanned or 1))|round(1) }}%"></i></div>
+              <strong>{{ flow.reviewed }}</strong>
+            </div>
+            <div class="row">
+              <span>Risk Passed</span>
+              <div class="bar"><i style="--w:{{ (flow.risk * 100 / (flow.scanned or 1))|round(1) }}%"></i></div>
+              <strong>{{ flow.risk }}</strong>
+            </div>
+            <div class="row">
+              <span>Executed</span>
+              <div class="bar"><i style="--w:{{ (flow.executed * 100 / (flow.scanned or 1))|round(1) }}%"></i></div>
+              <strong>{{ flow.executed }}</strong>
+            </div>
+          </div>
+        </article>
+
+        <article class="panel">
+          <header class="panel-header">
+            <h3>Discriminator Verdict Mix</h3>
+            <p>Reject unreasonable edge aggressively</p>
+          </header>
+          <div class="verdict-grid">
+            <div class="verdict accept">
+              <span>Accept</span>
+              <b>{{ stats.accepts }}</b>
+            </div>
+            <div class="verdict revise">
+              <span>Revise</span>
+              <b>{{ stats.revisions }}</b>
+            </div>
+            <div class="verdict reject">
+              <span>Reject</span>
+              <b>{{ stats.rejects }}</b>
+            </div>
+          </div>
+          <p class="note">Verdict confidence and edge are logged for full replay in decision logs.</p>
+        </article>
+      </section>
+
+      <section class="dual-grid">
+        <article class="panel">
+          <header class="panel-header">
+            <h3>Recent Decisions</h3>
+            <p>Generator + Discriminator + Risk</p>
+          </header>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Market</th>
+                  <th>Signal</th>
+                  <th>Verdict</th>
+                  <th>Edge</th>
+                  <th>Risk</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for d in recent_decisions %}
+                <tr>
+                  <td class="question">{{ d.question }}</td>
+                  <td>{{ d.generator_output.side if d.generator_output else "NA" }}</td>
+                  <td>{{ d.discriminator_output.verdict if d.discriminator_output else "NA" }}</td>
+                  <td>{{ d.discriminator_output.final_edge if d.discriminator_output else "0" }}</td>
+                  <td>{{ "PASS" if d.risk_decision and d.risk_decision.passed else "BLOCK" }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel">
+          <header class="panel-header">
+            <h3>Recent Paper Trades</h3>
+            <p>Execution simulator ledger</p>
+          </header>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Market</th>
+                  <th>Side</th>
+                  <th>USDC</th>
+                  <th>Price</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for t in recent_trades %}
+                <tr>
+                  <td>{{ t.market_id }}</td>
+                  <td>{{ t.side }}</td>
+                  <td>{{ t.size_usdc }}</td>
+                  <td>{{ t.fill_price }}</td>
+                  <td>{{ t.status }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+  </body>
+</html>
