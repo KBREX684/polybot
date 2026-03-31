@@ -26,6 +26,8 @@ class HardFilter:
             reasons.append("too_close_to_resolution")
         if market.hours_to_end > self.settings.max_hours_to_end:
             reasons.append("too_far_from_resolution")
-        if market.market_prob <= 0.01 or market.market_prob >= 0.99:
+        if market.market_prob <= self.settings.extreme_price_zone_low or market.market_prob >= self.settings.extreme_price_zone_high:
             reasons.append("extreme_price_zone")
+        if market.market_prob < self.settings.min_implied_probability:
+            reasons.append("implied_prob_below_min")
         return FilterResult(passed=len(reasons) == 0, reasons=reasons)

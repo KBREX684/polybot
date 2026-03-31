@@ -103,6 +103,7 @@ class TradingPipeline:
             stop_loss_pct=settings.stop_loss_pct,
             take_profit_pct=settings.take_profit_pct,
             max_hold_hours=settings.max_hold_hours,
+            edge_reversal_threshold=settings.edge_reversal_threshold,
         )
 
         # P2-1: Whale tracker

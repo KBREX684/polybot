@@ -6,10 +6,39 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
+import requests
 from flask import Flask, Response, jsonify, render_template, request
 
 from src.polybot.config import Settings
 from src.polybot.storage.database import Database
+
+
+def _fetch_live_price(gamma_url: str, market_id: str) -> float | None:
+    """Fetch current YES price from Gamma API for a single market."""
+    try:
+        resp = requests.get(
+            f"{gamma_url}/markets/{market_id}",
+            timeout=10,
+            headers={"User-Agent": "polybot-v2"},
+        )
+        resp.raise_for_status()
+        raw = resp.json()
+        prices = raw.get("outcomePrices", [])
+        if isinstance(prices, str):
+            prices = json.loads(prices)
+        if prices:
+            return float(prices[0])
+    except Exception:
+        pass
+    return None
+
+
+def _calc_pnl(side: str, entry_price: float, current_price: float, size_usdc: float) -> float:
+    if entry_price <= 0:
+        return 0.0
+    if side == "BUY_YES":
+        return (current_price - entry_price) / entry_price * size_usdc
+    return (entry_price - current_price) / entry_price * size_usdc
 
 
 def create_app(settings: Settings | None = None, db: Database | None = None) -> Flask:
@@ -102,6 +131,28 @@ def create_app(settings: Settings | None = None, db: Database | None = None) -> 
         if auth:
             return auth
         return jsonify(database.query_open_positions())
+
+    @app.get("/api/positions-pnl")
+    def positions_pnl_api() -> tuple[Any, int] | Any:
+        """Open positions enriched with live PnL from Gamma API."""
+        auth = _check_auth()
+        if auth:
+            return auth
+        positions = database.query_open_positions()
+        enriched = []
+        for p in positions:
+            live_price = _fetch_live_price(s.polymarket_gamma_url, p["market_id"])
+            if live_price is not None:
+                pnl = _calc_pnl(p["side"], p["entry_price"], live_price, p["size_usdc"])
+                p["live_price"] = round(live_price, 4)
+                p["live_pnl"] = round(pnl, 2)
+                p["live_pnl_pct"] = round(pnl / p["size_usdc"] * 100, 2) if p["size_usdc"] > 0 else 0.0
+            else:
+                p["live_price"] = p["current_price"]
+                p["live_pnl"] = 0.0
+                p["live_pnl_pct"] = 0.0
+            enriched.append(p)
+        return jsonify(enriched)
 
     @app.get("/api/decisions")
     def decisions_api() -> tuple[Any, int] | Any:

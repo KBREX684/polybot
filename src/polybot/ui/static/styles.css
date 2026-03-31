@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap");
 
 :root {
   --bg: #f7efe2;
@@ -12,6 +12,8 @@
   --clay: #ba4f3a;
   --gold: #f6bf62;
   --mint: #7aa786;
+  --red: #c0392b;
+  --green: #27ae60;
   --shadow: 0 20px 35px rgba(113, 51, 26, 0.12);
 }
 
@@ -26,7 +28,7 @@ body {
   min-height: 100%;
   color: var(--ink);
   background: radial-gradient(circle at 10% 5%, #fff5e6 0, var(--bg) 38%, var(--bg-2) 100%);
-  font-family: "Plus Jakarta Sans", "Segoe UI", sans-serif;
+  font-family: "Noto Sans SC", "Plus Jakarta Sans", "Segoe UI", sans-serif;
 }
 
 .bg-orb {
@@ -81,6 +83,13 @@ body {
   margin-bottom: 1.2rem;
 }
 
+.hero-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-shrink: 0;
+  align-items: center;
+}
+
 .eyebrow {
   margin: 0;
   letter-spacing: 0.08em;
@@ -103,6 +112,86 @@ h1 {
   font-size: 0.95rem;
 }
 
+/* 标签导航 */
+.tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid var(--card-border);
+  padding-bottom: 0;
+}
+
+.tab {
+  background: none;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  color: var(--ink);
+}
+
+.tab.active {
+  color: var(--ember);
+  border-bottom-color: var(--ember);
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* 状态条 */
+.status-bar {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+  padding: 0.7rem 1rem;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  font-size: 0.88rem;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-dot.ok {
+  background: var(--green);
+  box-shadow: 0 0 6px rgba(39, 174, 96, 0.5);
+}
+
+.status-dot.warn {
+  background: var(--gold);
+  box-shadow: 0 0 6px rgba(246, 191, 98, 0.5);
+}
+
+.status-dot.error {
+  background: var(--red);
+  box-shadow: 0 0 6px rgba(192, 57, 43, 0.5);
+}
+
+/* 按钮 */
 .pulse-chip {
   border: 1px solid var(--card-border);
   background: linear-gradient(120deg, rgba(255, 216, 166, 0.7), rgba(243, 156, 94, 0.35));
@@ -112,13 +201,38 @@ h1 {
   box-shadow: var(--shadow);
   animation: pulse 2.2s infinite;
   white-space: nowrap;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.85rem;
 }
 
+.btn-danger {
+  background: var(--clay);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 0.6rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+}
+
+.btn-danger:hover {
+  background: var(--red);
+}
+
+/* KPI卡片 */
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.75rem;
   margin-bottom: 0.85rem;
+}
+
+.kpi-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .kpi-card {
@@ -151,6 +265,7 @@ h1 {
   font-size: 1.5rem;
 }
 
+/* 面板 */
 .dual-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -182,6 +297,7 @@ h1 {
   font-size: 0.86rem;
 }
 
+/* 漏斗 */
 .funnel .row {
   display: grid;
   grid-template-columns: 90px 1fr 42px;
@@ -193,6 +309,11 @@ h1 {
 .funnel .row span {
   font-size: 0.86rem;
   color: var(--ink-soft);
+}
+
+.funnel .row b {
+  text-align: right;
+  font-size: 0.95rem;
 }
 
 .bar {
@@ -212,47 +333,29 @@ h1 {
   animation: sweep 0.9s ease;
 }
 
-.verdict-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.55rem;
+/* 文字颜色 */
+.text-green {
+  color: var(--green);
 }
 
-.verdict {
-  border-radius: 14px;
-  padding: 0.75rem;
-  border: 1px solid var(--card-border);
-  text-align: center;
+.text-red {
+  color: var(--red);
 }
 
-.verdict span {
-  display: block;
-  font-size: 0.8rem;
-  color: var(--ink-soft);
-}
-
-.verdict b {
-  font-size: 1.35rem;
-}
-
-.verdict.accept {
-  background: rgba(122, 167, 134, 0.15);
-}
-
-.verdict.revise {
-  background: rgba(246, 191, 98, 0.2);
-}
-
-.verdict.reject {
-  background: rgba(218, 111, 61, 0.16);
+.pnl-summary {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-left: 1rem;
 }
 
 .note {
   margin: 0.7rem 0 0;
   color: var(--ink-soft);
   font-size: 0.84rem;
+  padding: 0.5rem;
 }
 
+/* 表格 */
 .table-wrap {
   overflow: auto;
   border-radius: 12px;
@@ -297,8 +400,7 @@ tbody td {
 }
 
 @keyframes pulse {
-  0%,
-  100% {
+  0%, 100% {
     box-shadow: 0 0 0 0 rgba(218, 111, 61, 0.25);
   }
   50% {
@@ -313,8 +415,7 @@ tbody td {
 }
 
 @keyframes drift {
-  0%,
-  100% {
+  0%, 100% {
     transform: translate(0, 0);
   }
   50% {
@@ -336,10 +437,18 @@ tbody td {
   .dual-grid {
     grid-template-columns: 1fr;
   }
+
+  .status-bar {
+    flex-wrap: wrap;
+  }
 }
 
 @media (max-width: 560px) {
   .kpi-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tabs {
+    flex-wrap: wrap;
   }
 }

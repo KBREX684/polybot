@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Polybot Console</title>
+    <title>Polybot 控制台</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
   </head>
@@ -15,44 +15,109 @@
     <main class="page">
       <header class="hero">
         <div>
-          <p class="eyebrow">Polymarket AI Trading</p>
-          <h1>Control Console</h1>
+          <p class="eyebrow">Polymarket AI 交易系统</p>
+          <h1>控制台</h1>
           <p class="subtitle">
-            Paper Mode · Brier: <strong>{{ stats.avg_brier_score }}</strong> ·
-            Drawdown: <strong>{{ integrity.status }}</strong>
-            {% if whale_smi is not none %} · SMI: <strong>{{ whale_smi }}</strong>{% endif %}
+            模拟模式 · Brier评分: <strong>{{ stats.avg_brier_score }}</strong> ·
+            数据完整性: <strong>{{ integrity.status }}</strong>
+            {% if whale_smi is not none %} · 鲸鱼指数: <strong>{{ whale_smi }}</strong>{% endif %}
           </p>
         </div>
         <div class="hero-actions">
-          <button class="pulse-chip" onclick="location.href='/api/metrics'" title="JSON API">Live Data</button>
-          <button class="btn-danger" onclick="activateKillSwitch()">Kill Switch</button>
+          <button class="pulse-chip" onclick="refreshAll()">刷新数据</button>
+          <button class="btn-danger" onclick="activateKillSwitch()">紧急停止</button>
         </div>
       </header>
 
-      <!-- Tab Navigation -->
+      <!-- 标签导航 -->
       <nav class="tabs">
-        <button class="tab active" data-tab="overview">Overview</button>
-        <button class="tab" data-tab="positions">Positions</button>
-        <button class="tab" data-tab="analytics">Analytics</button>
-        <button class="tab" data-tab="audit">Audit</button>
+        <button class="tab active" data-tab="overview">总览</button>
+        <button class="tab" data-tab="positions">持仓</button>
+        <button class="tab" data-tab="analytics">分析</button>
+        <button class="tab" data-tab="audit">审计</button>
       </nav>
 
-      <!-- OVERVIEW TAB -->
+      <!-- 总览标签 -->
       <section class="tab-content active" id="tab-overview">
-        <div class="kpi-grid">
-          <article class="kpi-card"><span>Total Decisions</span><h2>{{ stats.decisions_total }}</h2></article>
-          <article class="kpi-card"><span>Trades Executed</span><h2>{{ stats.executed }}</h2></article>
-          <article class="kpi-card"><span>Traded USDC</span><h2>{{ stats.traded_usdc }}</h2></article>
-          <article class="kpi-card"><span>Avg Edge</span><h2>{{ stats.avg_edge }}</h2></article>
-          <article class="kpi-card"><span>Avg Confidence</span><h2>{{ stats.avg_confidence }}</h2></article>
-          <article class="kpi-card"><span>Avg Brier Score</span><h2>{{ stats.avg_brier_score }}</h2></article>
+        <!-- 状态指示条 -->
+        <div class="status-bar">
+          <div class="status-item">
+            <span class="status-dot ok"></span>
+            <span>系统状态: <strong>运行中</strong></span>
+          </div>
+          <div class="status-item">
+            <span>资金: <strong id="live-bankroll">加载中...</strong></span>
+          </div>
+          <div class="status-item">
+            <span>持仓数: <strong id="live-pos-count">{{ open_positions|length }}</strong></span>
+          </div>
+          <div class="status-item" style="margin-left:auto; font-size:0.78rem; color:var(--ink-soft)">
+            <span id="refresh-indicator"></span>
+          </div>
         </div>
 
+        <div class="kpi-grid">
+          <article class="kpi-card">
+            <span>扫描决策</span>
+            <h2 id="kpi-decisions">{{ stats.decisions_total }}</h2>
+          </article>
+          <article class="kpi-card">
+            <span>已执行交易</span>
+            <h2 id="kpi-trades">{{ stats.executed }}</h2>
+          </article>
+          <article class="kpi-card">
+            <span>交易总额(USDC)</span>
+            <h2 id="kpi-usdc">{{ stats.traded_usdc }}</h2>
+          </article>
+          <article class="kpi-card">
+            <span>平均边际</span>
+            <h2 id="kpi-edge">{{ stats.avg_edge }}</h2>
+          </article>
+          <article class="kpi-card">
+            <span>平均置信度</span>
+            <h2 id="kpi-conf">{{ stats.avg_confidence }}</h2>
+          </article>
+          <article class="kpi-card">
+            <span>Brier评分</span>
+            <h2 id="kpi-brier">{{ stats.avg_brier_score }}</h2>
+          </article>
+        </div>
+
+        <!-- 漏斗统计 -->
         <section class="dual-grid">
-          <article class="panel full-width">
+          <article class="panel">
             <header class="panel-header">
-              <h3>Equity Curve</h3>
-              <p>Bankroll over time</p>
+              <h3>决策漏斗</h3>
+              <p>从扫描到执行的转化过程</p>
+            </header>
+            {% set total = stats.decisions_total if stats.decisions_total > 0 else 1 %}
+            <div class="funnel">
+              <div class="row">
+                <span>扫描市场</span>
+                <div class="bar"><i style="--w:100%"></i></div>
+                <b>{{ stats.decisions_total }}</b>
+              </div>
+              <div class="row">
+                <span>通过筛选</span>
+                <div class="bar"><i style="--w:{{ (stats.filter_passed / total * 100)|round(1) }}%"></i></div>
+                <b>{{ stats.filter_passed }}</b>
+              </div>
+              <div class="row">
+                <span>通过风控</span>
+                <div class="bar"><i style="--w:{{ (stats.risk_passed / total * 100)|round(1) }}%"></i></div>
+                <b>{{ stats.risk_passed }}</b>
+              </div>
+              <div class="row">
+                <span>执行交易</span>
+                <div class="bar"><i style="--w:{{ (stats.executed / total * 100)|round(1) }}%"></i></div>
+                <b>{{ stats.executed }}</b>
+              </div>
+            </div>
+          </article>
+          <article class="panel">
+            <header class="panel-header">
+              <h3>资金曲线</h3>
+              <p>USDC余额随时间变化</p>
             </header>
             <canvas id="equityChart" height="220"></canvas>
           </article>
@@ -60,39 +125,55 @@
 
         <section class="dual-grid">
           <article class="panel">
-            <header class="panel-header"><h3>Recent Decisions</h3></header>
+            <header class="panel-header"><h3>最近决策(通过筛选)</h3></header>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Market</th><th>Signal</th><th>Verdict</th><th>Edge</th><th>Risk</th></tr></thead>
+                <thead>
+                  <tr><th>市场</th><th>方向</th><th>判定</th><th>边际</th><th>风控</th></tr>
+                </thead>
                 <tbody>
-                  {% for d in recent_decisions[:8] %}
+                  {% set ns = namespace(passed=[]) %}
+                  {% for d in recent_decisions %}
+                    {% if d.filter_passed %}{% set ns.passed = ns.passed + [d] %}{% endif %}
+                  {% endfor %}
+                  {% for d in (ns.passed[:8] if ns.passed else recent_decisions[:3]) %}
                   <tr>
-                    <td class="question">{{ d.question }}</td>
-                    <td>{{ d.generator_output.get('side','NA') if d.generator_output else 'NA' }}</td>
-                    <td>{{ d.discriminator_output.get('verdict','NA') if d.discriminator_output else 'NA' }}</td>
-                    <td>{{ d.discriminator_output.get('final_edge','0') if d.discriminator_output else '0' }}</td>
-                    <td>{{ 'PASS' if d.risk_decision and d.risk_decision.get('passed') else 'BLOCK' }}</td>
+                    <td class="question" title="{{ d.question }}">{{ d.question or d.market_id }}</td>
+                    <td>{{ d.generator_output.get('side', '无') if d.generator_output else '无' }}</td>
+                    <td>{{ d.discriminator_output.get('verdict', '无') if d.discriminator_output else '无' }}</td>
+                    <td>{{ d.discriminator_output.get('final_edge', '0') if d.discriminator_output else '0' }}</td>
+                    <td class="{{ 'text-green' if d.risk_decision and d.risk_decision.get('passed') else 'text-red' }}">
+                      {{ '通过' if d.risk_decision and d.risk_decision.get('passed') else '拒绝' }}
+                    </td>
                   </tr>
                   {% endfor %}
+                  {% if not ns.passed %}
+                  <tr><td colspan="5" class="note">暂无通过筛选的决策记录。系统正常运行中，等待合适的交易机会。</td></tr>
+                  {% endif %}
                 </tbody>
               </table>
             </div>
           </article>
           <article class="panel">
-            <header class="panel-header"><h3>Recent Trades</h3></header>
+            <header class="panel-header"><h3>最近交易</h3></header>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Market</th><th>Side</th><th>USDC</th><th>Price</th><th>Time</th></tr></thead>
+                <thead>
+                  <tr><th>市场</th><th>方向</th><th>金额</th><th>价格</th><th>时间</th></tr>
+                </thead>
                 <tbody>
                   {% for t in recent_trades[:8] %}
                   <tr>
                     <td class="question">{{ t.market_id }}</td>
-                    <td>{{ t.side }}</td>
-                    <td>{{ t.size_usdc }}</td>
+                    <td class="{{ 'text-green' if t.side == 'BUY_YES' else 'text-red' if t.side == 'BUY_NO' else '' }}">{{ t.side }}</td>
+                    <td>{{ t.size_usdc }} USDC</td>
                     <td>{{ t.fill_price }}</td>
                     <td>{{ t.timestamp[:16] }}</td>
                   </tr>
                   {% endfor %}
+                  {% if not recent_trades %}
+                  <tr><td colspan="5" class="note">暂无交易记录</td></tr>
+                  {% endif %}
                 </tbody>
               </table>
             </div>
@@ -100,74 +181,104 @@
         </section>
       </section>
 
-      <!-- POSITIONS TAB -->
+      <!-- 持仓标签 -->
       <section class="tab-content" id="tab-positions">
         <article class="panel">
-          <header class="panel-header"><h3>Open Positions ({{ open_positions|length }})</h3></header>
-          {% if open_positions %}
+          <header class="panel-header">
+            <h3>当前持仓 (<span id="positions-count">{{ open_positions|length }}</span>)</h3>
+            <span id="positions-total-pnl" class="pnl-summary"></span>
+          </header>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Market</th><th>Side</th><th>Entry</th><th>Size</th><th>Stop Loss</th><th>Take Profit</th><th>Opened</th></tr></thead>
-              <tbody>
+              <thead>
+                <tr><th>市场</th><th>方向</th><th>入场价</th><th>现价</th><th>金额</th><th>实时盈亏</th><th>止损</th><th>止盈</th><th>开仓时间</th></tr>
+              </thead>
+              <tbody id="positions-tbody">
                 {% for p in open_positions %}
                 <tr>
-                  <td class="question">{{ p.question or p.market_id }}</td>
-                  <td>{{ p.side }}</td>
+                  <td class="question" title="{{ p.question or p.market_id }}">{{ p.question or p.market_id }}</td>
+                  <td class="{{ 'text-green' if p.side == 'BUY_YES' else 'text-red' }}">{{ p.side }}</td>
                   <td>{{ p.entry_price }}</td>
-                  <td>{{ p.size_usdc }}</td>
+                  <td>{{ p.current_price }}</td>
+                  <td>{{ p.size_usdc }} USDC</td>
+                  <td class="note">加载中...</td>
                   <td>{{ p.stop_loss_price }}</td>
                   <td>{{ p.take_profit_price }}</td>
                   <td>{{ p.opened_at[:16] }}</td>
                 </tr>
                 {% endfor %}
+                {% if not open_positions %}
+                <tr><td colspan="9" class="note">当前无持仓。系统正在等待交易信号。</td></tr>
+                {% endif %}
               </tbody>
             </table>
           </div>
-          {% else %}
-          <p class="note">No open positions.</p>
-          {% endif %}
         </article>
       </section>
 
-      <!-- ANALYTICS TAB -->
+      <!-- 分析标签 -->
       <section class="tab-content" id="tab-analytics">
         <section class="dual-grid">
           <article class="panel">
-            <header class="panel-header"><h3>Calibration Accuracy</h3><p>Forecast prob vs actual outcome</p></header>
+            <header class="panel-header">
+              <h3>校准精度</h3>
+              <p>预测概率 vs 实际结果</p>
+            </header>
             <canvas id="calibrationChart" height="250"></canvas>
           </article>
           <article class="panel">
-            <header class="panel-header"><h3>Edge Distribution</h3><p>Histogram of final edges</p></header>
+            <header class="panel-header">
+              <h3>边际分布</h3>
+              <p>最终边际值直方图</p>
+            </header>
             <canvas id="edgeChart" height="250"></canvas>
           </article>
         </section>
         <article class="panel">
-          <header class="panel-header"><h3>Data Integrity</h3></header>
-          <div class="kpi-grid">
-            <article class="kpi-card"><span>Total Records</span><h2>{{ integrity.total }}</h2></article>
-            <article class="kpi-card"><span>Valid Checksums</span><h2>{{ integrity.valid }}</h2></article>
-            <article class="kpi-card"><span>Tampered</span><h2>{{ integrity.tampered }}</h2></article>
+          <header class="panel-header"><h3>数据完整性校验</h3></header>
+          <div class="kpi-grid kpi-grid-3">
+            <article class="kpi-card">
+              <span>总记录数</span>
+              <h2>{{ integrity.total }}</h2>
+            </article>
+            <article class="kpi-card">
+              <span>校验通过</span>
+              <h2>{{ integrity.valid }}</h2>
+            </article>
+            <article class="kpi-card">
+              <span>被篡改</span>
+              <h2 class="{{ 'text-red' if integrity.tampered > 0 else 'text-green' }}">{{ integrity.tampered }}</h2>
+            </article>
           </div>
         </article>
       </section>
 
-      <!-- AUDIT TAB -->
+      <!-- 审计标签 -->
       <section class="tab-content" id="tab-audit">
         <article class="panel">
-          <header class="panel-header"><h3>Decision Log</h3><p>Full audit trail from SQLite</p></header>
+          <header class="panel-header">
+            <h3>决策日志</h3>
+            <p>来自SQLite的完整审计记录（显示最近25条）</p>
+          </header>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Time</th><th>Market</th><th>Filter</th><th>Signal</th><th>Verdict</th><th>Edge</th><th>Risk</th></tr></thead>
+              <thead>
+                <tr><th>时间</th><th>市场</th><th>筛选</th><th>方向</th><th>判定</th><th>边际</th><th>风控</th></tr>
+              </thead>
               <tbody>
                 {% for d in recent_decisions[:25] %}
                 <tr>
                   <td>{{ d.timestamp[:16] if d.timestamp else '' }}</td>
-                  <td class="question">{{ d.question }}</td>
-                  <td>{{ 'PASS' if d.filter_passed else 'FAIL' }}</td>
-                  <td>{{ d.generator_output.get('side','NA') if d.generator_output else 'NA' }}</td>
-                  <td>{{ d.discriminator_output.get('verdict','NA') if d.discriminator_output else 'NA' }}</td>
-                  <td>{{ d.discriminator_output.get('final_edge','0') if d.discriminator_output else '0' }}</td>
-                  <td>{{ 'PASS' if d.risk_decision and d.risk_decision.get('passed') else 'BLOCK' }}</td>
+                  <td class="question" title="{{ d.question or d.market_id }}">{{ d.question or d.market_id }}</td>
+                  <td class="{{ 'text-green' if d.filter_passed else 'text-red' }}">
+                    {{ '通过' if d.filter_passed else '未通过' }}
+                  </td>
+                  <td>{{ d.generator_output.get('side', '无') if d.generator_output else '无' }}</td>
+                  <td>{{ d.discriminator_output.get('verdict', '无') if d.discriminator_output else '无' }}</td>
+                  <td>{{ d.discriminator_output.get('final_edge', '0') if d.discriminator_output else '0' }}</td>
+                  <td class="{{ 'text-green' if d.risk_decision and d.risk_decision.get('passed') else 'text-red' }}">
+                    {{ '通过' if d.risk_decision and d.risk_decision.get('passed') else '拒绝' }}
+                  </td>
                 </tr>
                 {% endfor %}
               </tbody>
@@ -175,20 +286,20 @@
           </div>
         </article>
         <article class="panel">
-          <header class="panel-header"><h3>API Endpoints</h3></header>
+          <header class="panel-header"><h3>API接口</h3></header>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Endpoint</th><th>Description</th></tr></thead>
+              <thead><tr><th>接口</th><th>说明</th></tr></thead>
               <tbody>
-                <tr><td><code>GET /api/metrics</code></td><td>Full JSON metrics</td></tr>
-                <tr><td><code>GET /api/equity-curve</code></td><td>Equity curve data</td></tr>
-                <tr><td><code>GET /api/positions</code></td><td>Open positions</td></tr>
-                <tr><td><code>GET /api/decisions?limit=50</code></td><td>Decision records</td></tr>
-                <tr><td><code>GET /api/trades?limit=50</code></td><td>Trade history</td></tr>
-                <tr><td><code>GET /api/integrity</code></td><td>SHA-256 audit verification</td></tr>
-                <tr><td><code>GET /api/whale</code></td><td>Whale scores</td></tr>
-                <tr><td><code>POST /api/kill-switch</code></td><td>Toggle kill switch</td></tr>
-                <tr><td><code>GET /health</code></td><td>Liveness probe</td></tr>
+                <tr><td><code>GET /api/metrics</code></td><td>完整JSON指标数据</td></tr>
+                <tr><td><code>GET /api/equity-curve</code></td><td>资金曲线数据</td></tr>
+                <tr><td><code>GET /api/positions</code></td><td>当前持仓</td></tr>
+                <tr><td><code>GET /api/decisions?limit=50</code></td><td>决策记录</td></tr>
+                <tr><td><code>GET /api/trades?limit=50</code></td><td>交易历史</td></tr>
+                <tr><td><code>GET /api/integrity</code></td><td>SHA-256审计校验</td></tr>
+                <tr><td><code>GET /api/whale</code></td><td>鲸鱼追踪数据</td></tr>
+                <tr><td><code>POST /api/kill-switch</code></td><td>紧急停止开关</td></tr>
+                <tr><td><code>GET /health</code></td><td>健康检查</td></tr>
               </tbody>
             </table>
           </div>
@@ -198,7 +309,7 @@
 
     <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
     <script>
-    // Tab switching
+    // 标签切换
     document.querySelectorAll('.tab').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
@@ -208,7 +319,7 @@
       });
     });
 
-    // Equity Curve
+    // 资金曲线图表
     const eqData = {{ equity_curve | tojson }};
     if (eqData && eqData.length > 0) {
       new Chart(document.getElementById('equityChart'), {
@@ -216,25 +327,98 @@
         data: {
           labels: eqData.map(e => e.timestamp ? e.timestamp.slice(5,16) : ''),
           datasets: [{
-            label: 'Bankroll (USDC)',
+            label: '余额 (USDC)',
             data: eqData.map(e => e.bankroll || 0),
             borderColor: '#da6f3d',
             backgroundColor: 'rgba(218,111,61,0.08)',
-            fill: true, tension: 0.3, pointRadius: 2,
+            fill: true, tension: 0.3, pointRadius: 3,
+            pointBackgroundColor: '#da6f3d',
           }]
         },
-        options: { responsive: true, plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: false } } }
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: false } }
+        }
       });
     }
 
-    // Kill switch
+    // 校准精度图表(占位)
+    const ctxCal = document.getElementById('calibrationChart');
+    if (ctxCal) {
+      new Chart(ctxCal, {
+        type: 'scatter',
+        data: {
+          datasets: [{
+            label: '预测 vs 实际',
+            data: [{x:0,y:0},{x:1,y:1}],
+            backgroundColor: 'rgba(218,111,61,0.6)',
+          },{
+            label: '完美校准',
+            data: [{x:0,y:0},{x:1,y:1}],
+            type: 'line',
+            borderColor: '#7aa786',
+            borderDash: [5,5],
+            pointRadius: 0,
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: { x: {title:{display:true,text:'预测概率'}}, y: {title:{display:true,text:'实际结果'}} }
+        }
+      });
+    }
+
+    // 边际分布图表
+    const ctxEdge = document.getElementById('edgeChart');
+    if (ctxEdge) {
+      fetch('/api/decisions?limit=100').then(r=>r.json()).then(decs => {
+        const edges = decs.map(d => d.discriminator_output && d.discriminator_output.final_edge).filter(e => e != null && e !== 0);
+        if (edges.length === 0) {
+          new Chart(ctxEdge, {
+            type: 'bar',
+            data: { labels: ['暂无数据'], datasets: [{ data: [0], backgroundColor: 'rgba(218,111,61,0.3)' }] },
+            options: { responsive: true, plugins: { legend: { display: false } } }
+          });
+          return;
+        }
+        const edgeBins = {};
+        edges.forEach(e => {
+          const bin = (Math.round(e * 20) / 20).toFixed(2);
+          edgeBins[bin] = (edgeBins[bin] || 0) + 1;
+        });
+        const sortedBins = Object.keys(edgeBins).sort();
+        new Chart(ctxEdge, {
+          type: 'bar',
+          data: {
+            labels: sortedBins,
+            datasets: [{
+              label: '边际分布',
+              data: sortedBins.map(k => edgeBins[k]),
+              backgroundColor: 'rgba(218,111,61,0.6)',
+              borderRadius: 4,
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: { x: {title:{display:true,text:'边际值'}}, y: {title:{display:true,text:'数量'}} }
+          }
+        });
+      });
+    }
+
+    // 紧急停止
     function activateKillSwitch() {
-      if (!confirm('Activate KILL SWITCH? This will close all positions and halt trading.')) return;
-      fetch('/api/kill-switch', { method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({enabled: true}) })
-        .then(r => r.json()).then(d => alert(d.message))
-        .catch(e => alert('Error: ' + e));
+      if (!confirm('确认激活紧急停止？这将平仓所有持仓并停止交易。')) return;
+      fetch('/api/kill-switch', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({enabled: true})
+      })
+        .then(r => r.json())
+        .then(d => alert(d.message))
+        .catch(e => alert('错误: ' + e));
     }
     </script>
   </body>

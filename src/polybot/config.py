@@ -118,6 +118,43 @@ class Settings:
     alert_slack_webhook: str
     alert_cooldown_seconds: int
 
+    # Transaction costs
+    transaction_fee_pct: float
+    exit_fee_pct: float
+
+    # Volatility adjustment
+    volatility_high_threshold: float
+    volatility_med_threshold: float
+    volatility_high_min_mult: float
+    volatility_med_min_mult: float
+
+    # Portfolio / category exposure
+    max_category_exposure_pct: float
+    max_correlated_positions: int
+
+    # Volatility adjustment
+    volatility_high_threshold: float
+    volatility_med_threshold: float
+    volatility_high_min_mult: float
+    volatility_med_min_mult: float
+
+    # Exposed previously-hardcoded values
+    max_open_positions: int
+    min_confidence: float
+    extreme_price_zone_low: float
+    extreme_price_zone_high: float
+    edge_reversal_threshold: float
+
+    # Market filtering extras
+    min_implied_probability: float
+    min_volume_usdc: float
+
+    # Time decay
+    near_resolution_hours: float
+    near_resolution_edge_boost: float
+    early_market_uncertainty_penalty: float
+    early_market_days_threshold: float
+
     # Logging
     log_level: str
 
@@ -200,4 +237,29 @@ class Settings:
             alert_cooldown_seconds=_env_int("ALERT_COOLDOWN_SECONDS", 300),
             # Logging
             log_level=_env_str("LOG_LEVEL", "INFO"),
+            # Transaction costs
+            transaction_fee_pct=_env_float("TRANSACTION_FEE_PCT", 0.02),
+            exit_fee_pct=_env_float("EXIT_FEE_PCT", 0.02),
+            # Volatility adjustment
+            volatility_high_threshold=_env_float("VOLATILITY_HIGH_THRESHOLD", 0.15),
+            volatility_med_threshold=_env_float("VOLATILITY_MED_THRESHOLD", 0.10),
+            volatility_high_min_mult=_env_float("VOLATILITY_HIGH_MIN_MULT", 0.4),
+            volatility_med_min_mult=_env_float("VOLATILITY_MED_MIN_MULT", 0.6),
+            # Portfolio / category exposure
+            max_category_exposure_pct=_env_float("MAX_CATEGORY_EXPOSURE_PCT", 0.35),
+            max_correlated_positions=_env_int("MAX_CORRELATED_POSITIONS", 4),
+            # Exposed previously-hardcoded values
+            max_open_positions=_env_int("MAX_OPEN_POSITIONS", 25),
+            min_confidence=_env_float("MIN_CONFIDENCE", 0.55),
+            extreme_price_zone_low=_env_float("EXTREME_PRICE_ZONE_LOW", 0.01),
+            extreme_price_zone_high=_env_float("EXTREME_PRICE_ZONE_HIGH", 0.99),
+            edge_reversal_threshold=_env_float("EDGE_REVERSAL_THRESHOLD", 0.02),
+            # Market filtering extras
+            min_implied_probability=_env_float("MIN_IMPLIED_PROBABILITY", 0.05),
+            min_volume_usdc=_env_float("MIN_VOLUME_USDC", 1000.0),
+            # Time decay
+            near_resolution_hours=_env_float("NEAR_RESOLUTION_HOURS", 48.0),
+            near_resolution_edge_boost=_env_float("NEAR_RESOLUTION_EDGE_BOOST", 0.15),
+            early_market_uncertainty_penalty=_env_float("EARLY_MARKET_UNCERTAINTY_PENALTY", 0.10),
+            early_market_days_threshold=_env_float("EARLY_MARKET_DAYS_THRESHOLD", 60.0),
         )

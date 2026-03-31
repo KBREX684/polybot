@@ -15,12 +15,14 @@ class PositionManager:
         stop_loss_pct: float = 0.20,
         take_profit_pct: float = 0.30,
         max_hold_hours: float = 336.0,
+        edge_reversal_threshold: float = 0.02,
     ) -> None:
         self.positions_path = Path(positions_path)
         self.positions_path.parent.mkdir(parents=True, exist_ok=True)
         self.stop_loss_pct = stop_loss_pct
         self.take_profit_pct = take_profit_pct
         self.max_hold_hours = max_hold_hours
+        self.edge_reversal_threshold = edge_reversal_threshold
         self._positions: dict[str, Position] = {}
         self._load_positions()
 
@@ -128,9 +130,10 @@ class PositionManager:
 
     def _is_edge_reversed(self, pos: Position, current_edge: float) -> bool:
         """Edge reversal: if we bought YES and edge is now negative, or vice versa."""
-        if pos.side == "BUY_YES" and current_edge < -0.02:
+        thresh = self.edge_reversal_threshold
+        if pos.side == "BUY_YES" and current_edge < -thresh:
             return True
-        if pos.side == "BUY_NO" and current_edge > 0.02:
+        if pos.side == "BUY_NO" and current_edge > thresh:
             return True
         return False
 
