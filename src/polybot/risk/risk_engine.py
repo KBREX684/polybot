@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from src.polybot.config import Settings
+from src.polybot.risk.drawdown_tracker import DrawdownTracker
 from src.polybot.risk.kelly import fractional_kelly
-from src.polybot.schemas import DiscriminatorOutput, GeneratorOutput, MarketCandidate, RiskDecision
+from src.polybot.schemas import DiscriminatorOutput, DrawdownLevel, GeneratorOutput, MarketCandidate, RiskDecision
 
 
 class RiskEngine:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, drawdown_tracker: DrawdownTracker | None = None) -> None:
         self.settings = settings
+        self.drawdown_tracker = drawdown_tracker
+        self.max_open_positions: int = 25
 
     def evaluate(
         self,
@@ -15,16 +18,47 @@ class RiskEngine:
         generated: GeneratorOutput,
         reviewed: DiscriminatorOutput,
         bankroll_usdc: float,
+        open_position_count: int = 0,
     ) -> RiskDecision:
         blocked: list[str] = []
+
+        # Kill switch check
+        if self.settings.kill_switch:
+            blocked.append("kill_switch_active")
+
+        # Generator no-trade
         if generated.side == "NO_TRADE":
             blocked.append("generator_no_trade")
+
+        # Discriminator reject
         if reviewed.verdict == "reject":
             blocked.append("discriminator_reject")
+
+        # Net edge check
         if reviewed.final_edge < self.settings.min_net_edge:
             blocked.append("edge_below_min_net_edge")
+
+        # Confidence filter
         if reviewed.final_confidence < 0.55:
             blocked.append("confidence_below_min")
+
+        # Max open positions
+        if open_position_count >= self.max_open_positions:
+            blocked.append("max_open_positions_reached")
+
+        # Daily loss limit
+        if self.drawdown_tracker and self.drawdown_tracker.daily_loss_exceeded(self.settings.max_daily_loss_usdc):
+            blocked.append("daily_loss_limit_exceeded")
+
+        # Drawdown heat system
+        drawdown_mult = 1.0
+        if self.drawdown_tracker:
+            level = self.drawdown_tracker.update(bankroll_usdc)
+            drawdown_mult = self.drawdown_tracker.position_multiplier(level)
+            if self.drawdown_tracker.is_trading_halted(level):
+                blocked.append("drawdown_max_halted")
+            if level == "critical":
+                blocked.append("drawdown_critical_reduced")
 
         estimated_prob = max(0.001, min(0.999, market.market_prob + reviewed.final_edge))
         kelly = fractional_kelly(
@@ -38,7 +72,7 @@ class RiskEngine:
             spread=market.spread,
             hours_to_end=market.hours_to_end,
         )
-        raw_fraction = kelly * multiplier
+        raw_fraction = kelly * multiplier * drawdown_mult
         capped_fraction = min(raw_fraction, self.settings.max_single_market_allocation)
         suggested_size = bankroll_usdc * capped_fraction
 

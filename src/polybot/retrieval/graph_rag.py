@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from src.polybot.engine.market_classifier import MarketCategory, build_category_queries, classify_market
 from src.polybot.retrieval.evidence_store import EvidenceStore
 from src.polybot.schemas import EvidenceItem, EvidencePack, GraphEdge, MarketCandidate
 
@@ -9,8 +10,8 @@ class GraphRAG:
         self.evidence_store = evidence_store
         self.top_k = top_k
 
-    def retrieve_for_market(self, market: MarketCandidate) -> EvidencePack:
-        queries = self._build_queries(market)
+    def retrieve_for_market(self, market: MarketCandidate, category: MarketCategory | None = None) -> EvidencePack:
+        queries = self._build_queries(market, category)
         merged_items: list[EvidenceItem] = []
         merged_edges: list[GraphEdge] = []
         for q in queries:
@@ -33,16 +34,11 @@ class GraphRAG:
             contradiction_score=contradiction,
         )
 
-    def _build_queries(self, market: MarketCandidate) -> list[str]:
-        q = market.question.strip()
-        return [
-            f"{q} latest official confirmation",
-            f"{q} evidence against outcome contradictory analysis",
-            f"{q} site:reuters.com OR site:apnews.com OR site:sec.gov",
-        ]
+    def _build_queries(self, market: MarketCandidate, category: MarketCategory | None = None) -> list[str]:
+        cat = category or classify_market(market)
+        return build_category_queries(market, cat)
 
     def _rank_items(self, items: list[EvidenceItem]) -> list[EvidenceItem]:
-        # High quality, fresh evidence first.
         items.sort(key=lambda x: (x.quality_score, x.published_at), reverse=True)
         return items
 

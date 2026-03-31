@@ -6,163 +6,153 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
-from flask import Flask, jsonify, render_template
+from flask import Flask, Response, jsonify, render_template, request
 
 from src.polybot.config import Settings
+from src.polybot.storage.database import Database
 
 
-def _read_jsonl(path: str) -> list[dict[str, Any]]:
-    file = Path(path)
-    if not file.exists():
-        return []
-    rows: list[dict[str, Any]] = []
-    with file.open("r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                rows.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-    return rows
-
-
-def _parse_ts(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    text = value.replace("Z", "+00:00")
-    try:
-        dt = datetime.fromisoformat(text)
-        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-    except ValueError:
-        return None
-
-
-def _count_recent(rows: list[dict[str, Any]], ts_key: str, within: timedelta) -> int:
-    now = datetime.now(tz=timezone.utc)
-    threshold = now - within
-    count = 0
-    for r in rows:
-        dt = _parse_ts(r.get(ts_key))
-        if dt and dt >= threshold:
-            count += 1
-    return count
-
-
-def _aggregate(decisions: list[dict[str, Any]], trades: list[dict[str, Any]]) -> dict[str, Any]:
-    total = len(decisions)
-    filter_passed = sum(1 for d in decisions if d.get("filter_passed"))
-    risk_passed = sum(1 for d in decisions if d.get("risk_decision", {}).get("passed"))
-    verdicts = [d.get("discriminator_output", {}).get("verdict", "unknown") for d in decisions]
-    accepts = sum(1 for v in verdicts if v == "accept")
-    rejects = sum(1 for v in verdicts if v == "reject")
-    revisions = sum(1 for v in verdicts if v == "revise")
-    edges = [float(d.get("discriminator_output", {}).get("final_edge", 0.0)) for d in decisions]
-    confs = [float(d.get("discriminator_output", {}).get("final_confidence", 0.0)) for d in decisions]
-
-    executed = len(trades)
-    traded_usdc = sum(float(t.get("size_usdc", 0.0)) for t in trades)
-
-    return {
-        "decisions_total": total,
-        "filter_passed": filter_passed,
-        "risk_passed": risk_passed,
-        "accepts": accepts,
-        "rejects": rejects,
-        "revisions": revisions,
-        "executed": executed,
-        "traded_usdc": round(traded_usdc, 2),
-        "avg_edge": round(mean(edges), 4) if edges else 0.0,
-        "avg_confidence": round(mean(confs), 4) if confs else 0.0,
-    }
-
-
-def _pipeline_counts(decisions: list[dict[str, Any]], trades: list[dict[str, Any]]) -> dict[str, int]:
-    scanned = len(decisions)
-    hard_filter = sum(1 for d in decisions if d.get("filter_passed"))
-    generated = sum(1 for d in decisions if d.get("generator_output", {}).get("side") != "NO_TRADE")
-    reviewed = sum(
-        1
-        for d in decisions
-        if d.get("discriminator_output", {}).get("verdict") in {"accept", "reject", "revise"}
-    )
-    risk = sum(1 for d in decisions if d.get("risk_decision", {}).get("passed"))
-    executed = len(trades)
-    return {
-        "scanned": scanned,
-        "hard_filter": hard_filter,
-        "generated": generated,
-        "reviewed": reviewed,
-        "risk": risk,
-        "executed": executed,
-    }
-
-
-def _runtime_stats(
-    decisions: list[dict[str, Any]],
-    trades: list[dict[str, Any]],
-    cycles: list[dict[str, Any]],
-    settings: Settings,
-) -> dict[str, Any]:
-    decisions_1h = _count_recent(decisions, "timestamp", timedelta(hours=1))
-    trades_1h = _count_recent(trades, "timestamp", timedelta(hours=1))
-    cycles_1h = _count_recent(cycles, "timestamp", timedelta(hours=1))
-    interval = max(1, settings.cycle_interval_seconds)
-    est_cycles_per_hour = round(3600 / interval, 2)
-    # Approx API budget per hour heuristic:
-    # - 1 gamma market pull / cycle
-    # - ~3 serper queries / passed market (worst case approximated by limit ratio)
-    # - 2 LLM calls / passed market
-    est_api_calls_per_hour = round(est_cycles_per_hour * (1 + settings.max_markets_per_cycle * 2))
-    return {
-        "cycle_interval_seconds": interval,
-        "recommended_cycle_interval_seconds": settings.recommended_cycle_interval_seconds,
-        "decisions_last_hour": decisions_1h,
-        "trades_last_hour": trades_1h,
-        "cycles_last_hour": cycles_1h,
-        "estimated_cycles_per_hour": est_cycles_per_hour,
-        "estimated_api_calls_per_hour": est_api_calls_per_hour,
-    }
-
-
-def create_app(settings: Settings | None = None) -> Flask:
+def create_app(settings: Settings | None = None, db: Database | None = None) -> Flask:
     s = settings or Settings.from_env()
+    database = db or Database(db_path=s.db_path)
+
     template_folder = str(Path(__file__).parent / "templates")
     static_folder = str(Path(__file__).parent / "static")
     app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
 
+    # Optional API key auth
+    def _check_auth() -> Response | None:
+        if not s.dashboard_api_key:
+            return None
+        key = request.headers.get("X-API-Key", "") or request.args.get("api_key", "")
+        if key != s.dashboard_api_key:
+            return jsonify({"error": "unauthorized"}), 401
+        return None
+
     @app.get("/")
     def dashboard() -> str:
-        decisions = _read_jsonl(s.decision_log_path)
-        trades = _read_jsonl(s.paper_ledger_path)
-        cycles = _read_jsonl(s.cycle_log_path)
-        stats = _aggregate(decisions, trades)
-        flow = _pipeline_counts(decisions, trades)
-        runtime = _runtime_stats(decisions, trades, cycles, s)
-        recent_decisions = list(reversed(decisions[-12:]))
-        recent_trades = list(reversed(trades[-12:]))
+        stats = database.stats_summary()
+        open_positions = database.query_open_positions()
+        recent_decisions = database.query_decisions(limit=15)
+        recent_trades = database.query_trades(limit=15)
+        equity_curve = database.equity_curve(limit=200)
+        integrity = database.verify_integrity()
+        whale_smi = None
+        if s.whale_enabled:
+            try:
+                whale_rows = database._conn.execute(
+                    "SELECT AVG(conviction) as avg_conv FROM whale_scores WHERE scanned_at > datetime('now', '-1 hour')"
+                ).fetchone()
+                whale_smi = round(whale_rows["avg_conv"], 1) if whale_rows and whale_rows["avg_conv"] else 0.0
+            except Exception:
+                whale_smi = 0.0
+
         return render_template(
             "dashboard.html",
             stats=stats,
-            flow=flow,
-            runtime=runtime,
+            open_positions=open_positions,
             recent_decisions=recent_decisions,
             recent_trades=recent_trades,
+            equity_curve=equity_curve,
+            integrity=integrity,
+            whale_smi=whale_smi,
+            settings_vars={
+                "kill_switch": s.kill_switch,
+                "whale_enabled": s.whale_enabled,
+                "paper_mode": True,
+                "generator_model": s.generator_model,
+                "discriminator_model": s.discriminator_model,
+                "bankroll": s.default_bankroll_usdc,
+                "cycle_interval": s.cycle_interval_seconds,
+            },
         )
 
     @app.get("/api/metrics")
-    def metrics() -> Any:
-        decisions = _read_jsonl(s.decision_log_path)
-        trades = _read_jsonl(s.paper_ledger_path)
-        cycles = _read_jsonl(s.cycle_log_path)
+    def metrics() -> tuple[Any, int] | Any:
+        auth = _check_auth()
+        if auth:
+            return auth
+        stats = database.stats_summary()
+        open_positions = database.query_open_positions()
+        recent_decisions = database.query_decisions(limit=20)
+        recent_trades = database.query_trades(limit=20)
+        equity_curve = database.equity_curve(limit=200)
+        integrity = database.verify_integrity()
         payload = {
-            "stats": _aggregate(decisions, trades),
-            "flow": _pipeline_counts(decisions, trades),
-            "runtime": _runtime_stats(decisions, trades, cycles, s),
-            "recent_decisions": list(reversed(decisions[-20:])),
-            "recent_trades": list(reversed(trades[-20:])),
+            "stats": stats,
+            "open_positions": open_positions,
+            "recent_decisions": recent_decisions,
+            "recent_trades": recent_trades,
+            "equity_curve": equity_curve,
+            "integrity": integrity,
         }
         return jsonify(payload)
+
+    @app.get("/api/equity-curve")
+    def equity_curve_api() -> tuple[Any, int] | Any:
+        auth = _check_auth()
+        if auth:
+            return auth
+        limit = request.args.get("limit", 200, type=int)
+        return jsonify(database.equity_curve(limit=limit))
+
+    @app.get("/api/positions")
+    def positions_api() -> tuple[Any, int] | Any:
+        auth = _check_auth()
+        if auth:
+            return auth
+        return jsonify(database.query_open_positions())
+
+    @app.get("/api/decisions")
+    def decisions_api() -> tuple[Any, int] | Any:
+        auth = _check_auth()
+        if auth:
+            return auth
+        limit = request.args.get("limit", 50, type=int)
+        offset = request.args.get("offset", 0, type=int)
+        return jsonify(database.query_decisions(limit=limit, offset=offset))
+
+    @app.get("/api/trades")
+    def trades_api() -> tuple[Any, int] | Any:
+        auth = _check_auth()
+        if auth:
+            return auth
+        limit = request.args.get("limit", 50, type=int)
+        return jsonify(database.query_trades(limit=limit))
+
+    @app.get("/api/integrity")
+    def integrity_api() -> tuple[Any, int] | Any:
+        auth = _check_auth()
+        if auth:
+            return auth
+        return jsonify(database.verify_integrity())
+
+    @app.get("/api/whale")
+    def whale_api() -> tuple[Any, int] | Any:
+        auth = _check_auth()
+        if auth:
+            return auth
+        try:
+            rows = database._conn.execute(
+                "SELECT * FROM whale_scores ORDER BY scanned_at DESC LIMIT 50"
+            ).fetchall()
+            return jsonify([dict(r) for r in rows])
+        except Exception:
+            return jsonify([])
+
+    @app.post("/api/kill-switch")
+    def kill_switch_api() -> tuple[Any, int] | Any:
+        auth = _check_auth()
+        if auth:
+            return auth
+        body = request.get_json(silent=True) or {}
+        new_state = body.get("enabled", True)
+        import os
+        os.environ["KILL_SWITCH"] = str(new_state).lower()
+        return jsonify({"kill_switch": new_state, "message": f"Kill switch {'activated' if new_state else 'deactivated'}"})
+
+    @app.get("/health")
+    def health() -> tuple[Any, int] | Any:
+        return jsonify({"status": "ok", "timestamp": datetime.now(tz=timezone.utc).isoformat()})
 
     return app

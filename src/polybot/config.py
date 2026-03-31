@@ -61,14 +61,65 @@ class Settings:
     min_hours_to_end: float
     max_hours_to_end: float
 
+    # Risk
     min_net_edge: float
     max_single_market_allocation: float
     min_trade_usdc: float
     kelly_fraction: float
+
+    # Kill switch
+    kill_switch: bool
+
+    # Drawdown heat system
+    max_drawdown_pct: float
+    warning_drawdown_pct: float
+    critical_drawdown_pct: float
+    auto_kill_at_max: bool
+
+    # Daily loss limit
+    max_daily_loss_usdc: float
+
+    # Position management
+    stop_loss_pct: float
+    take_profit_pct: float
+    max_hold_hours: float
+
+    # Calibration
+    calibration_extreme_threshold: float
+    calibration_evidence_penalty_weight: float
+    calibration_contradiction_penalty_weight: float
+    calibration_auto_retrain_after: int
+
+    # Cache
+    gamma_cache_ttl_seconds: int
+    serper_cache_ttl_seconds: int
+
+    # Dashboard
     dashboard_host: str
     dashboard_port: int
+    dashboard_api_key: str
     cycle_interval_seconds: int
     recommended_cycle_interval_seconds: int
+
+    # Whale tracker
+    whale_enabled: bool
+    whale_max_wallets: int
+    whale_min_conviction: float
+    whale_edge_boost: float
+    whale_edge_penalty: float
+
+    # Storage
+    db_path: str
+
+    # Alerts
+    alert_telegram_bot_token: str
+    alert_telegram_chat_id: str
+    alert_discord_webhook: str
+    alert_slack_webhook: str
+    alert_cooldown_seconds: int
+
+    # Logging
+    log_level: str
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -106,8 +157,47 @@ class Settings:
             max_single_market_allocation=_env_float("MAX_SINGLE_MARKET_ALLOCATION", 0.025),
             min_trade_usdc=_env_float("MIN_TRADE_USDC", 10.0),
             kelly_fraction=_env_float("KELLY_FRACTION", 0.25),
+            # Kill switch
+            kill_switch=_env_bool("KILL_SWITCH", False),
+            # Drawdown heat system
+            max_drawdown_pct=_env_float("MAX_DRAWDOWN_PCT", 0.20),
+            warning_drawdown_pct=_env_float("WARNING_DRAWDOWN_PCT", 0.10),
+            critical_drawdown_pct=_env_float("CRITICAL_DRAWDOWN_PCT", 0.15),
+            auto_kill_at_max=_env_bool("AUTO_KILL_AT_MAX", True),
+            # Daily loss limit
+            max_daily_loss_usdc=_env_float("MAX_DAILY_LOSS_USDC", 500.0),
+            # Position management
+            stop_loss_pct=_env_float("STOP_LOSS_PCT", 0.20),
+            take_profit_pct=_env_float("TAKE_PROFIT_PCT", 0.30),
+            max_hold_hours=_env_float("MAX_HOLD_HOURS", 336.0),
+            # Calibration
+            calibration_extreme_threshold=_env_float("CALIBRATION_EXTREME_THRESHOLD", 0.15),
+            calibration_evidence_penalty_weight=_env_float("CALIBRATION_EVIDENCE_PENALTY_WEIGHT", 0.30),
+            calibration_contradiction_penalty_weight=_env_float("CALIBRATION_CONTRADICTION_PENALTY_WEIGHT", 0.20),
+            calibration_auto_retrain_after=_env_int("CALIBRATION_AUTO_RETRAIN_AFTER", 30),
+            # Cache
+            gamma_cache_ttl_seconds=_env_int("GAMMA_CACHE_TTL_SECONDS", 300),
+            serper_cache_ttl_seconds=_env_int("SERPER_CACHE_TTL_SECONDS", 3600),
+            # Dashboard
             dashboard_host=_env_str("DASHBOARD_HOST", "127.0.0.1"),
             dashboard_port=_env_int("DASHBOARD_PORT", 2345),
+            dashboard_api_key=_env_str("DASHBOARD_API_KEY", ""),
             cycle_interval_seconds=_env_int("CYCLE_INTERVAL_SECONDS", 900),
             recommended_cycle_interval_seconds=_env_int("RECOMMENDED_CYCLE_INTERVAL_SECONDS", 900),
+            # Whale tracker
+            whale_enabled=_env_bool("WHALE_ENABLED", False),
+            whale_max_wallets=_env_int("WHALE_MAX_WALLETS", 20),
+            whale_min_conviction=_env_float("WHALE_MIN_CONVICTION", 15.0),
+            whale_edge_boost=_env_float("WHALE_EDGE_BOOST", 0.03),
+            whale_edge_penalty=_env_float("WHALE_EDGE_PENALTY", 0.015),
+            # Storage
+            db_path=_env_str("DB_PATH", "data/polybot.db"),
+            # Alerts
+            alert_telegram_bot_token=_env_str("ALERT_TELEGRAM_BOT_TOKEN", ""),
+            alert_telegram_chat_id=_env_str("ALERT_TELEGRAM_CHAT_ID", ""),
+            alert_discord_webhook=_env_str("ALERT_DISCORD_WEBHOOK", ""),
+            alert_slack_webhook=_env_str("ALERT_SLACK_WEBHOOK", ""),
+            alert_cooldown_seconds=_env_int("ALERT_COOLDOWN_SECONDS", 300),
+            # Logging
+            log_level=_env_str("LOG_LEVEL", "INFO"),
         )

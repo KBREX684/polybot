@@ -82,6 +82,59 @@ class TradeIntent(BaseModel):
     reason_code: str
 
 
+MarketCategory = Literal[
+    "MACRO", "ELECTION", "CORPORATE", "LEGAL", "TECHNOLOGY",
+    "SCIENCE", "SPORTS", "CRYPTO", "GEOPOLITICS", "CULTURE", "OTHER",
+]
+
+DrawdownLevel = Literal["normal", "warning", "critical", "max"]
+
+
+class Position(BaseModel):
+    market_id: str
+    question: str = ""
+    side: Literal["BUY_YES", "BUY_NO"]
+    entry_price: float = Field(ge=0.0, le=1.0)
+    current_price: float = Field(ge=0.0, le=1.0)
+    size_usdc: float = Field(gt=0.0)
+    opened_at: datetime
+    stop_loss_price: float = Field(ge=0.0, le=1.0, default=0.0)
+    take_profit_price: float = Field(ge=0.0, le=1.0, default=1.0)
+    max_hold_hours: float = Field(gt=0.0, default=336.0)
+    category: MarketCategory = "OTHER"
+
+    @property
+    def pnl_usdc(self) -> float:
+        if self.side == "BUY_YES":
+            return (self.current_price - self.entry_price) / max(self.entry_price, 0.001) * self.size_usdc
+        return (self.entry_price - self.current_price) / max(self.entry_price, 0.001) * self.size_usdc
+
+    @property
+    def hours_held(self) -> float:
+        return (datetime.now(tz=timezone.utc) - self.opened_at).total_seconds() / 3600.0
+
+    @property
+    def is_expired(self) -> bool:
+        return self.hours_held >= self.max_hold_hours
+
+
+class ExitSignal(BaseModel):
+    position_id: str
+    reason: Literal["stop_loss", "take_profit", "time_exit", "edge_reversal", "kill_switch"]
+    exit_price: float
+    pnl_usdc: float
+
+
+class CalibrationRecord(BaseModel):
+    timestamp: datetime
+    market_id: str
+    category: MarketCategory
+    raw_prob: float = Field(ge=0.0, le=1.0)
+    calibrated_prob: float = Field(ge=0.0, le=1.0)
+    actual_outcome: float | None = None
+    brier_score: float | None = None
+
+
 class DecisionRecord(BaseModel):
     timestamp: datetime
     market_id: str
@@ -92,6 +145,7 @@ class DecisionRecord(BaseModel):
     discriminator_output: dict
     risk_decision: dict
     executed_trade: dict | None = None
+    extra: dict | None = None
 
     @model_validator(mode="before")
     @classmethod

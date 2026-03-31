@@ -5,16 +5,23 @@ from typing import Any
 
 import requests
 
+from src.polybot.data.cache import TTLCache
 from src.polybot.schemas import MarketCandidate
 
 
 class GammaClient:
-    def __init__(self, base_url: str) -> None:
+    def __init__(self, base_url: str, cache_ttl_seconds: int = 300) -> None:
         self.base_url = base_url.rstrip("/")
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "polybot-v2"})
+        self.cache = TTLCache(default_ttl_seconds=cache_ttl_seconds)
 
     def get_markets(self, limit: int = 50, active_only: bool = True) -> list[dict[str, Any]]:
+        cache_key = f"markets:{limit}:{active_only}"
+        cached = self.cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         params = {
             "limit": limit,
             "active": str(active_only).lower(),
@@ -24,7 +31,9 @@ class GammaClient:
         resp = self.session.get(f"{self.base_url}/markets", params=params, timeout=20)
         resp.raise_for_status()
         data = resp.json()
-        return data if isinstance(data, list) else []
+        result = data if isinstance(data, list) else []
+        self.cache.set(cache_key, result)
+        return result
 
     def to_candidate(self, raw: dict[str, Any]) -> MarketCandidate | None:
         try:

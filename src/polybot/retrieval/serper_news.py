@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 import requests
 from bs4 import BeautifulSoup
 
+from src.polybot.data.cache import TTLCache
 from src.polybot.schemas import EvidenceItem, EvidencePack, GraphEdge, MarketCandidate
 from src.polybot.retrieval.evidence_store import EvidenceStore
 
@@ -21,6 +22,7 @@ class SerperNewsClient:
         gl: str = "us",
         hl: str = "en",
         num: int = 8,
+        cache_ttl_seconds: int = 3600,
     ) -> None:
         self.api_key = api_key.strip()
         self.endpoint = endpoint
@@ -29,10 +31,17 @@ class SerperNewsClient:
         self.num = num
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "polybot-serper/1.0"})
+        self.cache = TTLCache(default_ttl_seconds=cache_ttl_seconds)
 
     def search_news(self, query: str, num: int) -> list[dict[str, Any]]:
         if not self.api_key:
             return []
+
+        cache_key = f"serper:{hashlib.sha256(query.encode()).hexdigest()[:16]}:{num}"
+        cached = self.cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         payload = {"q": query, "gl": self.gl, "hl": self.hl, "num": num}
         headers = {
             "X-API-KEY": self.api_key,
@@ -43,7 +52,9 @@ class SerperNewsClient:
             resp.raise_for_status()
             data = resp.json()
             news = data.get("news", [])
-            return news if isinstance(news, list) else []
+            result = news if isinstance(news, list) else []
+            self.cache.set(cache_key, result)
+            return result
         except Exception:
             return []
 
